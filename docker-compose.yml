@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  cosmomedia-web:
+    container_name: cosmomedia-web
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    user: "0:0"
+    networks:
+      - web
+    labels:
+      # Traefik configuration for the main site with HTTPS
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`www.cosmomedia.ma`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=myresolver"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3400"
+
+      # Redirect HTTP to HTTPS for www.cosmomedia.ma
+      - "traefik.http.routers.frontend-http.rule=Host(`www.cosmomedia.ma`)"
+      - "traefik.http.routers.frontend-http.entrypoints=web"
+      - "traefik.http.routers.frontend-http.middlewares=https-redirect"
+
+      # Redirect non-www to www
+      - "traefik.http.routers.frontend-nonwww.rule=Host(`cosmomedia.ma`)"
+      - "traefik.http.routers.frontend-nonwww.entrypoints=websecure"
+      - "traefik.http.routers.frontend-nonwww.tls.certresolver=myresolver"
+      - "traefik.http.routers.frontend-nonwww.middlewares=www-redirect,https-redirect"
+
+      # Redirect non-www to www via HTTP
+      - "traefik.http.routers.frontend-nonwww-http.rule=Host(`cosmomedia.ma`)"
+      - "traefik.http.routers.frontend-nonwww-http.entrypoints=web"
+      - "traefik.http.routers.frontend-nonwww-http.middlewares=https-redirect,www-redirect"
+
+      # Let's Encrypt challenge path for automatic cert renewal
+      - "traefik.http.routers.beme-challenge.rule=PathPrefix(`/.well-known/acme-challenge/`)"
+      - "traefik.http.routers.beme-challenge.entrypoints=web"
+      - "traefik.http.routers.beme-challenge.service=frontend"
+      - "traefik.http.routers.beme-challenge.priority=1000"
+
+      # Define the https-redirect middleware
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https?://(cosmomedia.ma)"
+      - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://www.cosmomedia.ma"
+      - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
+
+networks:
+  web:
+    external: true
